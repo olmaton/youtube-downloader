@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "bin": "download.js",
   "pkg": {
-    "assets": ["yt-dlp.exe"]
+    "assets": [
+      "yt-dlp.exe"
+    ]
   }
 }

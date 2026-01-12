@@ -89,8 +89,8 @@ function ask(question) {
       return;
     }
 
-    const formatInput = await ask('🎵 Formato (mp4/mp3): ');
-    const format = formatInput.trim().toLowerCase() === 'mp3' ? 'mp3' : 'mp4';
+    const formatInput = await ask('🎵 Formato (webm/mp4/mp3): ');
+    const format = formatInput.trim().toLowerCase() === 'mp3' ? 'mp3' : (formatInput.trim().toLowerCase() === 'webm' ? 'webm' : 'mp4');
 
     const folderPathInput = await ask('📁 Carpeta donde guardar (deja vacío para usar "./downloaded"): ');
     const folderPath = folderPathInput.trim() || path.join(process.cwd(), 'downloaded');
@@ -104,7 +104,7 @@ function ask(question) {
     let qualityLabel = '';
 
     if (format === 'mp4') {
-      const qualityInput = await ask('📺 Calidad deseada (1080p/720p/480p/360p) o enter para la mejor: ');
+      const qualityInput = await ask('📺 Calidad deseada (2160p/1440p/1080p/720p/480p/360p) o enter para la mejor: ');
       const result = getVideoFormatByQuality(qualityInput.trim().toLowerCase());
       quality = result.format;
       qualityLabel = result.label;
@@ -124,7 +124,10 @@ function ask(question) {
     if (format === 'mp3') {
       command = `"${ytdlpPath}" -x --audio-format mp3 --audio-quality 0 --no-playlist -o "${output}" "${url}"`;
       console.log('🎧 Descargando audio en mp3...');
-    } else {
+    } else if (format === 'webm') {
+      command = `"${ytdlpPath}" -f "${quality}" --merge-output-format webm --no-playlist -o "${output}" "${url}"`;
+      console.log(`🎬 Descargando video en webm (${qualityLabel || 'mejor calidad'})...`);
+    } else if (format === 'mp4') {
       command = `"${ytdlpPath}" -f "${quality}" --merge-output-format mp4 --no-playlist -o "${output}" "${url}"`;
       console.log(`🎬 Descargando video en mp4 (${qualityLabel || 'mejor calidad'})...`);
     }
