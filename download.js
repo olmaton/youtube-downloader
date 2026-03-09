@@ -58,9 +58,12 @@ function getVideoFormatByQuality(quality) {
   }
 }
 
+// Argumentos base: evita JS challenges del player de YouTube
+const YTDLP_BASE_FLAGS = '--extractor-args "youtube:player_client=ios,web"';
+
 const getTitle = async (url, ytdlpPath) => {
   return new Promise((resolve, reject) => {
-    exec(`"${ytdlpPath}" --no-playlist --print "%(title)s" "${url}"`, (error, stdout) => {
+    exec(`"${ytdlpPath}" ${YTDLP_BASE_FLAGS} --no-playlist --print "%(title)s" "${url}"`, (error, stdout) => {
       if (error) return reject('Error al obtener título');
       const title = cleanFilename(stdout.toString().trim());
 
@@ -127,13 +130,13 @@ function ask(question) {
     let command = '';
 
     if (format === 'mp3') {
-      command = `"${ytdlpPath}" -x --audio-format mp3 --audio-quality 0 --no-playlist -o "${output}" "${url}"`;
+      command = `"${ytdlpPath}" ${YTDLP_BASE_FLAGS} -x --audio-format mp3 --audio-quality 0 --no-playlist -o "${output}" "${url}"`;
       console.log('🎧 Descargando audio en mp3...');
     } else if (format === 'webm') {
-      command = `"${ytdlpPath}" -f "${quality}" --merge-output-format webm --no-playlist -o "${output}" "${url}"`;
+      command = `"${ytdlpPath}" ${YTDLP_BASE_FLAGS} -f "${quality}" --merge-output-format webm --no-playlist -o "${output}" "${url}"`;
       console.log(`🎬 Descargando video en webm (${qualityLabel || 'mejor calidad'})...`);
     } else if (format === 'mp4') {
-      command = `"${ytdlpPath}" -f "${quality}" --merge-output-format mp4 --no-playlist -o "${output}" "${url}"`;
+      command = `"${ytdlpPath}" ${YTDLP_BASE_FLAGS} -f "${quality}" --merge-output-format mp4 --no-playlist -o "${output}" "${url}"`;
       console.log(`🎬 Descargando video en mp4 (${qualityLabel || 'mejor calidad'})...`);
     }
 
