@@ -2,8 +2,11 @@ const readline = require('readline');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-process.env.PATH += ';' + process.cwd(); // incluir ffmpeg.exe y yt-dlp.exe si están al lado
+// incluir ffmpeg.exe, yt-dlp.exe y deno en el PATH
+process.env.PATH += ';' + process.cwd();
+process.env.PATH += ';' + path.join(os.homedir(), '.deno', 'bin');
 
 const isPkg = typeof process.pkg !== 'undefined';
 
