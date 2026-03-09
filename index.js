@@ -51,8 +51,9 @@ function getYtDlpPath() {
   return path.join(process.cwd(), 'yt-dlp.exe');
 }
 // Argumentos base para todos los comandos yt-dlp.
-// tv,web: el cliente tv accede a streams adaptativos de alta calidad sin PO Token.
-const YTDLP_BASE_ARGS = ['--extractor-args', 'youtube:player_client=tv,web'];
+// web: deno resuelve los JS challenges y provee streams adaptativos HD sin PO Token ni DRM.
+// ios y tv fueron descartados: ios requiere GVS PO Token, tv tiene experimento DRM activo.
+const YTDLP_BASE_ARGS = ['--extractor-args', 'youtube:player_client=web'];
 /**
  * Valida y limpia la URL de YouTube.
  * Solo acepta URLs de youtube.com y youtu.be.
@@ -86,15 +87,13 @@ function cleanFilename(title) {
 }
 
 function getVideoFormat(quality) {
-  // bestvideo[height<=Xp] elige automáticamente el mejor codec disponible
-  // (AV1 > VP9/vp09 > H.264) sin filtrar por codec para evitar fallos de match.
   const map = {
-    '2160p': 'bestvideo[height<=2160]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best',
-    '1440p': 'bestvideo[height<=1440]+bestaudio[ext=m4a]/bestvideo[height<=1440]+bestaudio/best',
-    '1080p': 'bestvideo[height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best',
-    '720p':  'bestvideo[height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best',
-    '480p':  'bestvideo[height<=480]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best',
-    '360p':  'bestvideo[height<=360]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best',
+    '2160p': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]/best',
+    '1440p': 'bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1440]+bestaudio/best[height<=1440]/best',
+    '1080p': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+    '720p':  'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+    '480p':  'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best',
+    '360p':  'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best',
   };
   return map[quality] || 'bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best';
 }
@@ -159,10 +158,11 @@ app.get('/info', (req, res) => {
   }
 
   const ytdlp = getYtDlpPath();
-  // Usamos array de argumentos para evitar inyección de comandos
+  // Para metadatos no se necesita resolver el player — skip-download es suficiente
+  // y evita el overhead/fallos del player_client web con deno.
   const args = [
-    ...YTDLP_BASE_ARGS,
     '--no-playlist',
+    '--skip-download',
     '--print', '%(title)s|||%(duration)s|||%(thumbnail)s',
     cleanUrl,
   ];
@@ -176,6 +176,7 @@ app.get('/info', (req, res) => {
 
   proc.on('exit', (code) => {
     if (code !== 0) {
+      console.error(`[/info] Error yt-dlp (code ${code}):\n${errOutput.trim()}`);
       return res.status(500).json({ error: 'No se pudo obtener información del video', detail: errOutput.trim() });
     }
     const parts = output.trim().split('|||');
