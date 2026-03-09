@@ -96,6 +96,41 @@ class MediaScreen extends StatelessWidget {
             title: const Text('Media Manager'),
             actions: [
               const ServerStatusBadge(),
+              // Refresh jobs button — visible only on the Jobs tab
+              Builder(
+                builder: (context) {
+                  final tabController = DefaultTabController.of(context);
+                  return AnimatedBuilder(
+                    animation: tabController,
+                    builder: (context, _) {
+                      if (tabController.index != 2) {
+                        return const SizedBox.shrink();
+                      }
+                      return BlocBuilder<JobsBloc, JobsState>(
+                        builder: (context, state) {
+                          final loading = state is JobsLoading;
+                          return IconButton(
+                            icon: loading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.refresh),
+                            tooltip: 'Refrescar jobs',
+                            onPressed: loading
+                                ? null
+                                : () => context
+                                    .read<JobsBloc>()
+                                    .add(const LoadJobsEvent()),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
               // Retry button when server is not running
               BlocBuilder<ServerBloc, ServerBlocState>(
                 builder: (context, state) {

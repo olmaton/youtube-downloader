@@ -178,5 +178,14 @@
     "format": "mp4",
     "quality": "",
     "completedAt": "2026-03-09T23:35:19.453Z"
+  },
+  {
+    "jobId": "eb937101-f00b-47d8-a1ab-3e87a0ef9738",
+    "type": "convert",
+    "title": "String Karma - De Ti Me Olvidï¿½ (Video Oficial) [1080p]",
+    "fileName": "String Karma - De Ti Me Olvidï¿½ (Video Oficial) [1080p] [compatible].mp4",
+    "format": "mp4",
+    "quality": "",
+    "completedAt": "2026-03-09T23:44:56.554Z"
   }
 ]
