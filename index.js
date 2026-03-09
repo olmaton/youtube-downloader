@@ -50,10 +50,7 @@ const jobs = new Map();
 function getYtDlpPath() {
   return path.join(process.cwd(), 'yt-dlp.exe');
 }
-// Argumentos base para todos los comandos yt-dlp.
-// web: deno resuelve los JS challenges y provee streams adaptativos HD sin PO Token ni DRM.
-// ios y tv fueron descartados: ios requiere GVS PO Token, tv tiene experimento DRM activo.
-const YTDLP_BASE_ARGS = ['--extractor-args', 'youtube:player_client=web'];
+
 /**
  * Valida y limpia la URL de YouTube.
  * Solo acepta URLs de youtube.com y youtu.be.
@@ -251,7 +248,7 @@ app.post('/download', (req, res) => {
 
   // Obtener título y arrancar descarga en segundo plano
   const ytdlp = getYtDlpPath();
-  const titleProc = spawn(ytdlp, [...YTDLP_BASE_ARGS, '--no-playlist', '--print', '%(title)s', cleanUrl]);
+  const titleProc = spawn(ytdlp, ['--no-playlist', '--print', '%(title)s', cleanUrl]);
   let titleOut = '';
 
   titleProc.stdout.on('data', (d) => { titleOut += d.toString(); });
@@ -277,13 +274,13 @@ app.post('/download', (req, res) => {
 
     let args = [];
     if (format === 'mp3') {
-      args = [...YTDLP_BASE_ARGS, '-x', '--audio-format', 'mp3', '--audio-quality', '0',
+      args = ['-x', '--audio-format', 'mp3', '--audio-quality', '0',
               '--no-playlist', '--newline', '-o', filePath, cleanUrl];
     } else if (format === 'webm') {
-      args = [...YTDLP_BASE_ARGS, '-f', getVideoFormat(quality), '--merge-output-format', 'webm',
+      args = ['-f', getVideoFormat(quality), '--merge-output-format', 'webm',
               '--no-playlist', '--newline', '-o', filePath, cleanUrl];
     } else {
-      args = [...YTDLP_BASE_ARGS, '-f', getVideoFormat(quality), '--merge-output-format', 'mp4',
+      args = ['-f', getVideoFormat(quality), '--merge-output-format', 'mp4',
               '--no-playlist', '--newline', '-o', filePath, cleanUrl];
     }
 
