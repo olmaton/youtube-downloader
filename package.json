@@ -5,12 +5,13 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "cli": "node download.js"
+    "cli": "node download.js",
+    "build": "npx pkg@5.8.1 index.js --output youtube-downloader.exe --targets node18-win-x64"
   },
-  "bin": "download.js",
   "pkg": {
     "assets": [
-      "yt-dlp.exe"
+      "yt-dlp.exe",
+      "ffmpeg.exe"
     ]
   },
   "dependencies": {

@@ -52,5 +52,77 @@
     "format": "mp4",
     "quality": "2160p",
     "completedAt": "2026-03-09T22:29:59.986Z"
+  },
+  {
+    "jobId": "10cdeb5e-7140-4c80-bcb7-0096ec64d761",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [compatible].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:39:09.264Z"
+  },
+  {
+    "jobId": "5c3b539c-9cc3-4987-a2ed-b27a56bc9980",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:47:03.178Z"
+  },
+  {
+    "jobId": "6f37902c-60ca-4053-a414-dbc4b7c612a9",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:50:39.683Z"
+  },
+  {
+    "jobId": "ef7e555d-4cf5-4e50-b427-18df6458f428",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:53:30.266Z"
+  },
+  {
+    "jobId": "d669c29f-729a-4c96-91d4-25f00d9be215",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:57:30.520Z"
+  },
+  {
+    "jobId": "ec5c930d-e28c-4998-b330-d301c4529484",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T22:59:11.078Z"
+  },
+  {
+    "jobId": "391ae879-8be1-439d-bf03-33a6096c529e",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [2160p].mp4",
+    "format": "mp4",
+    "quality": "2160p",
+    "completedAt": "2026-03-09T23:01:50.525Z"
+  },
+  {
+    "jobId": "704fb0b9-a51c-4ea0-93ab-05a269b9bffb",
+    "type": "download",
+    "title": "String Karma - De Ti Me Olvid� (Video Oficial)",
+    "fileName": "String Karma - De Ti Me Olvid� (Video Oficial) [1080p].mp4",
+    "format": "mp4",
+    "quality": "1080p",
+    "completedAt": "2026-03-09T23:02:51.814Z"
   }
 ]

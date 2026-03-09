@@ -4,10 +4,12 @@ import '../bloc/convert_bloc.dart';
 import '../bloc/download_bloc.dart';
 import '../bloc/history_bloc.dart';
 import '../bloc/local_media_bloc.dart';
+import '../bloc/server_bloc.dart';
 import '../widgets/convert_manager_dialog.dart';
 import '../widgets/download_manager_dialog.dart';
 import '../widgets/history_tile.dart';
 import '../widgets/media_tile.dart';
+import '../widgets/server_status_badge.dart';
 
 class MediaScreen extends StatelessWidget {
   const MediaScreen({super.key});
@@ -90,6 +92,23 @@ class MediaScreen extends StatelessWidget {
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Media Manager'),
+            actions: [
+              const ServerStatusBadge(),
+              // Retry button when server is not running
+              BlocBuilder<ServerBloc, ServerBlocState>(
+                builder: (context, state) {
+                  if (state is ServerNotFound || state is ServerFailed) {
+                    return IconButton(
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Reintentar conexión',
+                      onPressed: () =>
+                          context.read<ServerBloc>().add(CheckServerEvent()),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
             bottom: const TabBar(
               tabs: [
                 Tab(icon: Icon(Icons.download_done_outlined), text: 'Descargas'),

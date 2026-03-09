@@ -51,9 +51,8 @@ function getYtDlpPath() {
   return path.join(process.cwd(), 'yt-dlp.exe');
 }
 // Argumentos base para todos los comandos yt-dlp.
-// --extractor-args "youtube:player_client=ios,web" evita resolver JS challenges
-// que pueden fallar según la versión del player de YouTube.
-const YTDLP_BASE_ARGS = ['--extractor-args', 'youtube:player_client=ios,web'];
+// tv,web: el cliente tv accede a streams adaptativos de alta calidad sin PO Token.
+const YTDLP_BASE_ARGS = ['--extractor-args', 'youtube:player_client=tv,web'];
 /**
  * Valida y limpia la URL de YouTube.
  * Solo acepta URLs de youtube.com y youtu.be.
@@ -87,15 +86,17 @@ function cleanFilename(title) {
 }
 
 function getVideoFormat(quality) {
+  // bestvideo[height<=Xp] elige automáticamente el mejor codec disponible
+  // (AV1 > VP9/vp09 > H.264) sin filtrar por codec para evitar fallos de match.
   const map = {
-    '2160p': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best',
-    '1440p': 'bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1440]+bestaudio/best',
-    '1080p': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best',
-    '720p':  'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best',
-    '480p':  'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best',
-    '360p':  'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best',
+    '2160p': 'bestvideo[height<=2160]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best',
+    '1440p': 'bestvideo[height<=1440]+bestaudio[ext=m4a]/bestvideo[height<=1440]+bestaudio/best',
+    '1080p': 'bestvideo[height<=1080]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best',
+    '720p':  'bestvideo[height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best',
+    '480p':  'bestvideo[height<=480]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best',
+    '360p':  'bestvideo[height<=360]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best',
   };
-  return map[quality] || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best';
+  return map[quality] || 'bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best';
 }
 
 /**
@@ -285,11 +286,19 @@ app.post('/download', (req, res) => {
               '--no-playlist', '--newline', '-o', filePath, cleanUrl];
     }
 
+    console.log(`\n[${jobId}] ▶ Iniciando descarga`);
+    console.log(`[${jobId}]   Título  : ${title}`);
+    console.log(`[${jobId}]   Formato : ${format}  Calidad: ${quality || 'mejor'}`);
+    console.log(`[${jobId}]   Salida  : ${filePath}`);
+    console.log(`[${jobId}]   Comando : yt-dlp ${args.join(' ')}\n`);
+
     const proc = spawn(ytdlp, args);
     job.proc = proc;
 
     const handleData = (data) => {
       data.toString().split('\n').forEach((line) => {
+        const trimmed = line.trim();
+        if (trimmed) console.log(`[${jobId}] ${trimmed}`);
         const progress = parseProgress(line);
         if (progress) Object.assign(job, progress);
       });
@@ -318,6 +327,7 @@ app.post('/download', (req, res) => {
       }
 
       if (!resolvedPath) {
+        console.error(`[${jobId}] ❌ Descarga fallida — archivo no encontrado en ${DOWNLOAD_DIR}`);
         job.status = 'error';
         job.error  = 'La descarga falló o el archivo no pudo ser encontrado';
         job.proc   = null;
@@ -326,6 +336,7 @@ app.post('/download', (req, res) => {
 
       // ── Sin conversión: terminar aquí ───────────────────────────────────────
       if (!job.convert) {
+        console.log(`[${jobId}] ✅ Descarga completada: ${resolvedName}`);
         job.status   = 'done';
         job.percent  = 100;
         job.filePath = resolvedPath;
@@ -346,6 +357,8 @@ app.post('/download', (req, res) => {
       job.totalSize = '';
       job.fileName  = convFileName;
 
+      console.log(`[${jobId}] 🔄 Iniciando conversión: ${resolvedName} → ${convFileName}`);
+
       const { proc: convProc, promise: convPromise } = convertToCompatibleMp4(
         resolvedPath,
         convFilePath,
@@ -362,6 +375,7 @@ app.post('/download', (req, res) => {
       convPromise
         .then(() => {
           if (!jobs.has(jobId)) return;
+          console.log(`[${jobId}] ✅ Conversión completada: ${convFileName}`);
           job.status   = 'done';
           job.percent  = 100;
           job.filePath = convFilePath;
@@ -370,13 +384,13 @@ app.post('/download', (req, res) => {
         })
         .catch((err) => {
           if (!jobs.has(jobId)) return;
+          console.error(`[${jobId}] ❌ Conversión fallida: ${err.message}`);
           job.status = 'error';
           job.error  = `Conversión fallida: ${err.message}`;
           job.proc   = null;
         })
         .finally(() => {
-          // Eliminar el archivo descargado original (ya convertido)
-          try { fs.unlinkSync(resolvedPath); } catch { /* ignorar */ }
+          // El archivo descargado original se conserva intencionalmente
         });
     });
   });
@@ -609,7 +623,6 @@ app.get('/file/:jobId', (req, res) => {
   res.download(job.filePath, job.fileName, (err) => {
     if (!err) {
       setTimeout(() => {
-        try { fs.unlinkSync(job.filePath); } catch { /* ya eliminado */ }
         jobs.delete(req.params.jobId);
       }, 5000);
     }
