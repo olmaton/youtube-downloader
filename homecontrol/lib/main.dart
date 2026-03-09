@@ -8,6 +8,7 @@ import 'features/media/data/media_api.dart';
 import 'features/media/bloc/download_bloc.dart';
 import 'features/media/bloc/convert_bloc.dart';
 import 'features/media/bloc/history_bloc.dart';
+import 'features/media/bloc/jobs_bloc.dart';
 import 'features/media/bloc/local_media_bloc.dart';
 import 'features/media/bloc/server_bloc.dart';
 
@@ -39,6 +40,9 @@ class _Root extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => HistoryBloc(api: api, storage: storage),
+        ),
+        BlocProvider(
+          create: (_) => JobsBloc(api: api),
         ),
         BlocProvider(
           create: (_) =>

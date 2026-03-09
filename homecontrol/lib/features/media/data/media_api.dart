@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/history_item.dart';
+import '../models/job_item.dart';
 import '../models/job_status.dart';
 import '../models/video_info.dart';
 
@@ -82,5 +83,10 @@ class MediaApi {
 
   Future<void> cancelJob(String jobId) async {
     await _dio.delete('/job/$jobId');
+  }
+
+  Future<JobsResponse> getJobs() async {
+    final res = await _dio.get<Map<String, dynamic>>('/jobs');
+    return JobsResponse.fromJson(res.data!);
   }
 }

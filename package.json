@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "cli": "node download.js",
-    "build": "npx pkg@5.8.1 index.js --output youtube-downloader.exe --targets node18-win-x64"
+    "build": "npx pkg@5.8.1 index.js --output youtube-downloader.exe --targets node18-win-x64",
+    "cp": "cp youtube-downloader.exe \\homecontrol\\build\\windows\\x64\\runner\\Release\\youtube-downloader.exe"
   },
   "pkg": {
     "assets": [

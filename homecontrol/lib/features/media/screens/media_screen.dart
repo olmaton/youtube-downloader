@@ -4,11 +4,13 @@ import '../bloc/convert_bloc.dart';
 import '../bloc/download_bloc.dart';
 import '../bloc/history_bloc.dart';
 import '../bloc/local_media_bloc.dart';
+import '../bloc/jobs_bloc.dart';
 import '../bloc/server_bloc.dart';
 import '../widgets/convert_manager_dialog.dart';
 import '../widgets/download_manager_dialog.dart';
 import '../widgets/history_tile.dart';
 import '../widgets/media_tile.dart';
+import '../widgets/job_tile.dart';
 import '../widgets/server_status_badge.dart';
 
 class MediaScreen extends StatelessWidget {
@@ -17,7 +19,7 @@ class MediaScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: MultiBlocListener(
         listeners: [
           // When download completes, refresh local list + show snackbar
@@ -113,6 +115,7 @@ class MediaScreen extends StatelessWidget {
               tabs: [
                 Tab(icon: Icon(Icons.download_done_outlined), text: 'Descargas'),
                 Tab(icon: Icon(Icons.history), text: 'Historial'),
+                Tab(icon: Icon(Icons.work_outline), text: 'Jobs'),
               ],
             ),
           ),
@@ -120,6 +123,7 @@ class MediaScreen extends StatelessWidget {
             children: [
               _DownloadsTab(),
               _HistoryTab(),
+              _JobsTab(),
             ],
           ),
           floatingActionButton: Column(
@@ -323,6 +327,76 @@ class _HistoryTabState extends State<_HistoryTab>
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Jobs Tab ─────────────────────────────────────────────────────────────────
+
+class _JobsTab extends StatefulWidget {
+  const _JobsTab();
+
+  @override
+  State<_JobsTab> createState() => _JobsTabState();
+}
+
+class _JobsTabState extends State<_JobsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<JobsBloc>().add(const LoadJobsEvent());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return BlocBuilder<JobsBloc, JobsState>(
+      builder: (context, state) {
+        if (state is JobsInitial || state is JobsLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (state is JobsError) {
+          return _ErrorView(
+            message: state.message,
+            onRetry: () =>
+                context.read<JobsBloc>().add(const LoadJobsEvent()),
+          );
+        }
+        if (state is JobsLoaded) {
+          if (state.data.jobs.isEmpty) {
+            return _EmptyView(
+              icon: Icons.work_off_outlined,
+              title: 'Sin jobs activos',
+              subtitle: 'Aquí aparecerán las descargas y conversiones en curso.',
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () async =>
+                context.read<JobsBloc>().add(const LoadJobsEvent()),
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 8, bottom: 100),
+              itemCount: state.data.jobs.length,
+              itemBuilder: (context, i) {
+                final job = state.data.jobs[i];
+                return JobTile(
+                  job: job,
+                  isCancelling: state.cancellingIds.contains(job.jobId),
+                  onCancel: job.isActive
+                      ? () => context
+                          .read<JobsBloc>()
+                          .add(CancelJobEvent(job.jobId))
+                      : null,
+                );
+              },
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
     );
   }
 }
