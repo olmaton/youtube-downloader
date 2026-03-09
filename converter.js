@@ -3,9 +3,9 @@
  *
  * Módulo de conversión de video a MP4 compatible con la mayoría de reproductores.
  *
- * Preset de compatibilidad máxima:
- *   - Video : H.264 (libx264), CRF 23, preset medium
- *   - Audio : AAC 192 kbps, estéreo
+ * Preset de alta calidad con compatibilidad máxima:
+ *   - Video : H.264 (libx264), CRF 18, preset slow, perfil High 4.1
+ *   - Audio : AAC 256 kbps, estéreo
  *   - Pixel : yuv420p  (compatible con dispositivos móviles y reproductores básicos)
  *   - Flags : -movflags +faststart  (inicia reproducción sin esperar descarga completa)
  */
@@ -17,13 +17,15 @@ const path = require('path');
 
 const FFMPEG_PATH = path.join(process.cwd(), 'ffmpeg.exe');
 
-// Argumentos de ffmpeg para máxima compatibilidad
+// Argumentos de ffmpeg para alta calidad con compatibilidad máxima
 const COMPATIBLE_PRESET = [
   '-c:v', 'libx264',
-  '-preset', 'medium',
-  '-crf', '23',
+  '-preset', 'slow',
+  '-crf', '18',
+  '-profile:v', 'high',
+  '-level:v', '4.1',
   '-c:a', 'aac',
-  '-b:a', '192k',
+  '-b:a', '256k',
   '-ac', '2',
   '-pix_fmt', 'yuv420p',
   '-movflags', '+faststart',
