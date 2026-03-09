@@ -126,7 +126,7 @@ app.get('/', (_req, res) => {
     version: '1.0.0',
     endpoints: {
       'GET  /info?url=<youtube_url>':         'Información del video (título, miniatura, duración)',
-      'POST /download':                        'Inicia descarga. Body: { url, format, quality }',
+      'POST /download':                        'Inicia descarga. Body: { url, format, quality, convert }',
       'POST /convert':                         'Convierte un video subido a MP4 compatible (H.264+AAC). Form-data: video',
       'GET  /jobs':                            'Lista de todos los jobs activos',
       'GET  /progress/:jobId':                 'SSE — progreso en tiempo real',
@@ -208,11 +208,12 @@ app.get('/jobs', (_req, res) => {
 
 /**
  * POST /download
- * Body: { url: string, format: 'mp3'|'mp4'|'webm', quality: '720p'|...  }
+ * Body: { url: string, format: 'mp3'|'mp4'|'webm', quality: '720p'|..., convert: boolean }
+ * convert=true: tras la descarga convierte automáticamente al preset MP4 compatible.
  * Respuesta: { jobId: string }
  */
 app.post('/download', (req, res) => {
-  const { url, format = 'mp4', quality = '720p' } = req.body;
+  const { url, format = 'mp4', quality = '720p', convert = false } = req.body;
 
   const cleanUrl = cleanYoutubeUrl(url || '');
   if (!cleanUrl) {
@@ -236,6 +237,7 @@ app.post('/download', (req, res) => {
     title: '',
     error: null,
     proc: null,
+    convert: convert === true,
   });
 
   // Responder inmediatamente con el jobId
@@ -295,27 +297,83 @@ app.post('/download', (req, res) => {
     proc.on('exit', (exitCode) => {
       if (!jobs.has(jobId)) return; // fue cancelado
 
+      // Resuelve la ruta real del archivo descargado (yt-dlp puede ajustar la extensión)
+      let resolvedPath = null;
+      let resolvedName = null;
+
       if (exitCode === 0 && fs.existsSync(filePath)) {
-        job.status = 'done';
-        job.percent = 100;
-        job.filePath = filePath;
-        db.saveEntry({ jobId, type: 'download', title, fileName, format, quality });
+        resolvedPath = filePath;
+        resolvedName = fileName;
       } else {
-        // yt-dlp a veces ajusta la extensión; buscar archivo más cercano
         const found = fs.readdirSync(DOWNLOAD_DIR)
           .find((f) => f.startsWith(title) && f.endsWith(`.${format}`));
         if (found) {
-          job.status = 'done';
-          job.percent = 100;
-          job.filePath = path.join(DOWNLOAD_DIR, found);
-          job.fileName = found;
-          db.saveEntry({ jobId, type: 'download', title, fileName: found, format, quality });
-        } else {
-          job.status = 'error';
-          job.error = 'La descarga falló o el archivo no pudo ser encontrado';
+          resolvedPath = path.join(DOWNLOAD_DIR, found);
+          resolvedName = found;
         }
       }
-      job.proc = null;
+
+      if (!resolvedPath) {
+        job.status = 'error';
+        job.error  = 'La descarga falló o el archivo no pudo ser encontrado';
+        job.proc   = null;
+        return;
+      }
+
+      // ── Sin conversión: terminar aquí ───────────────────────────────────────
+      if (!job.convert) {
+        job.status   = 'done';
+        job.percent  = 100;
+        job.filePath = resolvedPath;
+        job.fileName = resolvedName;
+        job.proc     = null;
+        db.saveEntry({ jobId, type: 'download', title, fileName: resolvedName, format, quality });
+        return;
+      }
+
+      // ── Con conversión: encadenar ffmpeg ───────────────────────────────────
+      const convFileName = `${title} [compatible].mp4`;
+      const convFilePath = path.join(DOWNLOAD_DIR, convFileName);
+
+      job.status    = 'converting';
+      job.percent   = 0;
+      job.speed     = '';
+      job.eta       = '';
+      job.totalSize = '';
+      job.fileName  = convFileName;
+
+      const { proc: convProc, promise: convPromise } = convertToCompatibleMp4(
+        resolvedPath,
+        convFilePath,
+        (progress) => {
+          if (!jobs.has(jobId)) return;
+          job.percent   = progress.percent;
+          job.speed     = progress.speed;
+          job.totalSize = progress.size;
+        }
+      );
+
+      job.proc = convProc;
+
+      convPromise
+        .then(() => {
+          if (!jobs.has(jobId)) return;
+          job.status   = 'done';
+          job.percent  = 100;
+          job.filePath = convFilePath;
+          job.proc     = null;
+          db.saveEntry({ jobId, type: 'download', title, fileName: convFileName, format: 'mp4', quality });
+        })
+        .catch((err) => {
+          if (!jobs.has(jobId)) return;
+          job.status = 'error';
+          job.error  = `Conversión fallida: ${err.message}`;
+          job.proc   = null;
+        })
+        .finally(() => {
+          // Eliminar el archivo descargado original (ya convertido)
+          try { fs.unlinkSync(resolvedPath); } catch { /* ignorar */ }
+        });
     });
   });
 });
