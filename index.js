@@ -1,9 +1,13 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { convertToCompatibleMp4 } = require('./converter');
+const db = require('./db');
+const { saveEntry, getHistory, clearHistory, deleteEntry, renameEntry } = db;
 
 // Añadir el directorio de trabajo al PATH para encontrar yt-dlp.exe y ffmpeg.exe
 process.env.PATH += ';' + process.cwd();
@@ -11,6 +15,7 @@ process.env.PATH += ';' + process.cwd();
 const app = express();
 const PORT = process.env.PORT || 4000;
 const DOWNLOAD_DIR = path.join(process.cwd(), 'downloaded');
+const UPLOADS_DIR  = path.join(process.cwd(), 'uploads');
 
 app.use(cors());
 app.use(express.json());
@@ -18,6 +23,23 @@ app.use(express.json());
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 }
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// ─── Multer (recepción de archivos para conversión) ────────────────────────────
+// Solo se aceptan archivos de video; nombre aleatorio para evitar colisiones.
+const videoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename:    (_req, _file, cb) => cb(null, `${crypto.randomUUID()}${path.extname(_file.originalname)}`),
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 }, // 4 GB máx
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('video/')) return cb(null, true);
+    cb(new Error('Solo se permiten archivos de video'));
+  },
+});
 
 // Almacenamiento en memoria de los jobs activos
 // jobId → { status, percent, speed, eta, filePath, fileName, title, error, proc }
@@ -105,12 +127,18 @@ app.get('/', (_req, res) => {
     endpoints: {
       'GET  /info?url=<youtube_url>':         'Información del video (título, miniatura, duración)',
       'POST /download':                        'Inicia descarga. Body: { url, format, quality }',
+      'POST /convert':                         'Convierte un video subido a MP4 compatible (H.264+AAC). Form-data: video',
       'GET  /jobs':                            'Lista de todos los jobs activos',
       'GET  /progress/:jobId':                 'SSE — progreso en tiempo real',
       'GET  /status/:jobId':                   'Estado del job (JSON polling)',
       'GET  /file/:jobId':                     'Descarga el archivo terminado',
       'DELETE /job/:jobId':                    'Cancela y elimina el job',
+      'GET  /history':                          'Historial de descargas y conversiones completadas',
+      'DELETE /history':                        'Limpia todo el historial',
+      'DELETE /history/:jobId':                 'Elimina una entrada del historial',
+      'PATCH  /history/:jobId/rename':           'Renombra el archivo de una entrada del historial',
     },
+    convertPreset: 'H.264 + AAC 192k + yuv420p + faststart',
     formats: ['mp3', 'mp4', 'webm'],
     qualities: ['360p', '480p', '720p', '1080p', '1440p', '2160p'],
   });
@@ -271,6 +299,7 @@ app.post('/download', (req, res) => {
         job.status = 'done';
         job.percent = 100;
         job.filePath = filePath;
+        db.saveEntry({ jobId, type: 'download', title, fileName, format, quality });
       } else {
         // yt-dlp a veces ajusta la extensión; buscar archivo más cercano
         const found = fs.readdirSync(DOWNLOAD_DIR)
@@ -280,6 +309,7 @@ app.post('/download', (req, res) => {
           job.percent = 100;
           job.filePath = path.join(DOWNLOAD_DIR, found);
           job.fileName = found;
+          db.saveEntry({ jobId, type: 'download', title, fileName: found, format, quality });
         } else {
           job.status = 'error';
           job.error = 'La descarga falló o el archivo no pudo ser encontrado';
@@ -288,6 +318,158 @@ app.post('/download', (req, res) => {
       job.proc = null;
     });
   });
+});
+
+/**
+ * POST /convert
+ * Acepta un archivo de video vía multipart/form-data (campo "video").
+ * Lo convierte al preset MP4 de máxima compatibilidad usando ffmpeg.
+ * Devuelve { jobId } — usar /progress/:jobId, /status/:jobId y /file/:jobId igual que en /download.
+ */
+app.post('/convert', videoUpload.single('video'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Se requiere un archivo de video en el campo "video"' });
+  }
+
+  const inputPath  = req.file.path;
+  const baseName   = path.basename(req.file.originalname, path.extname(req.file.originalname));
+  const safeBase   = baseName.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'converted';
+  const fileName   = `${safeBase} [compatible].mp4`;
+  const outputPath = path.join(DOWNLOAD_DIR, fileName);
+  const jobId      = crypto.randomUUID();
+
+  jobs.set(jobId, {
+    status:    'converting',
+    percent:   0,
+    speed:     '',
+    eta:       '',
+    totalSize: '',
+    filePath:  null,
+    fileName,
+    title:     safeBase,
+    error:     null,
+    proc:      null,
+  });
+
+  res.status(202).json({ jobId });
+
+  const { proc, promise } = convertToCompatibleMp4(inputPath, outputPath, (progress) => {
+    const job = jobs.get(jobId);
+    if (job) {
+      job.percent   = progress.percent;
+      job.speed     = progress.speed;
+      job.totalSize = progress.size;
+    }
+  });
+
+  const job = jobs.get(jobId);
+  job.proc = proc;
+
+  promise
+    .then(() => {
+      const j = jobs.get(jobId);
+      if (!j) return; // fue cancelado
+      j.status   = 'done';
+      j.percent  = 100;
+      j.filePath = outputPath;
+      j.proc     = null;
+      db.saveEntry({ jobId, type: 'convert', title: safeBase, fileName, format: 'mp4', quality: '' });
+    })
+    .catch((err) => {
+      const j = jobs.get(jobId);
+      if (!j) return;
+      j.status = 'error';
+      j.error  = err.message;
+      j.proc   = null;
+    })
+    .finally(() => {
+      // Limpiar el archivo de entrada temporal
+      try { fs.unlinkSync(inputPath); } catch { /* ignorar */ }
+    });
+});
+
+/**
+ * PATCH /history/:jobId/rename
+ * Renombra el archivo de una entrada del historial (en disco y en el registro).
+ * Body: { name: string }  — solo el nombre base, sin extensión.
+ * La extensión original se conserva automáticamente.
+ */
+app.patch('/history/:jobId/rename', (req, res) => {
+  const { name } = req.body;
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'Se requiere el campo "name" con el nuevo nombre' });
+  }
+
+  // Sanear: quitar caracteres inválidos y bloquear path traversal
+  const safeName = name
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\.\.+/g, '.')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!safeName) {
+    return res.status(400).json({ error: 'El nombre resultante es inválido' });
+  }
+
+  // Buscar en historial para obtener el fileName actual
+  const history = db.getHistory();
+  const entry = history.find((e) => e.jobId === req.params.jobId);
+  if (!entry) return res.status(404).json({ error: 'Entrada no encontrada en el historial' });
+
+  const ext        = path.extname(entry.fileName);          // p.ej. ".mp4"
+  const newFileName = `${safeName}${ext}`;
+  const oldFilePath = path.join(DOWNLOAD_DIR, entry.fileName);
+  const newFilePath = path.join(DOWNLOAD_DIR, newFileName);
+
+  // Renombrar en disco solo si el archivo aun existe
+  if (fs.existsSync(oldFilePath)) {
+    try {
+      fs.renameSync(oldFilePath, newFilePath);
+    } catch (err) {
+      return res.status(500).json({ error: 'No se pudo renombrar el archivo en disco', detail: err.message });
+    }
+  }
+
+  // Actualizar la entrada persistida
+  const updated = db.renameEntry(req.params.jobId, newFileName);
+
+  // Actualizar el job en memoria si aun existe
+  const job = jobs.get(req.params.jobId);
+  if (job) {
+    job.fileName = newFileName;
+    if (job.filePath) job.filePath = newFilePath;
+  }
+
+  res.json({ ok: true, fileName: newFileName, entry: updated });
+});
+
+/**
+ * GET /history
+ * Devuelve el historial persistido de descargas y conversiones completadas.
+ */
+app.get('/history', (_req, res) => {
+  const history = db.getHistory();
+  res.json({ total: history.length, history });
+});
+
+/**
+ * DELETE /history
+ * Limpia todo el historial.
+ */
+app.delete('/history', (_req, res) => {
+  db.clearHistory();
+  res.json({ ok: true });
+});
+
+/**
+ * DELETE /history/:jobId
+ * Elimina una entrada específica del historial.
+ */
+app.delete('/history/:jobId', (req, res) => {
+  const deleted = db.deleteEntry(req.params.jobId);
+  if (!deleted) return res.status(404).json({ error: 'Entrada no encontrada en el historial' });
+  res.json({ ok: true });
 });
 
 /**
@@ -397,7 +579,11 @@ app.listen(PORT, () => {
   console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}\n`);
   console.log('  GET    /info?url=<yt_url>   → Información del video');
   console.log('  POST   /download            → Iniciar descarga { url, format, quality }');
+  console.log('  POST   /convert             → Convertir video subido a MP4 compatible (form-data: video)');
   console.log('  GET    /jobs                → Lista de todos los jobs');
+  console.log('  GET    /history             → Historial persistido');
+  console.log('  DELETE /history             → Limpiar historial');
+  console.log('  DELETE /history/:jobId      → Eliminar entrada del historial');
   console.log('  GET    /progress/:jobId     → Progreso en tiempo real (SSE)');
   console.log('  GET    /status/:jobId       → Estado JSON (polling)');
   console.log('  GET    /file/:jobId         → Descargar archivo');
