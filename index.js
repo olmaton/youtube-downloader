@@ -166,7 +166,7 @@ app.get('/info', (req, res) => {
     cleanUrl,
   ];
 
-  const proc = spawn(ytdlp, args);
+  const proc = spawn(ytdlp, args, { windowsHide: true });
   let output = '';
   let errOutput = '';
 
@@ -250,7 +250,7 @@ app.post('/download', (req, res) => {
 
   // Obtener título y arrancar descarga en segundo plano
   const ytdlp = getYtDlpPath();
-  const titleProc = spawn(ytdlp, ['--no-playlist', '--print', '%(title)s', cleanUrl]);
+  const titleProc = spawn(ytdlp, ['--no-playlist', '--print', '%(title)s', cleanUrl], { windowsHide: true });
   let titleOut = '';
 
   titleProc.stdout.on('data', (d) => { titleOut += d.toString(); });
@@ -290,7 +290,7 @@ app.post('/download', (req, res) => {
     logger.debug(`[${jobId}]   Salida  : ${filePath}`);
     logger.debug(`[${jobId}]   Comando : yt-dlp ${args.join(' ')}`);
 
-    const proc = spawn(ytdlp, args);
+    const proc = spawn(ytdlp, args, { windowsHide: true });
     job.proc = proc;
 
     const handleData = (data) => {

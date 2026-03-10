@@ -91,7 +91,7 @@ function convertToCompatibleMp4(inputPath, outputPath, onProgress) {
     outputPath,
   ];
 
-  const proc = spawn(FFMPEG_PATH, args);
+  const proc = spawn(FFMPEG_PATH, args, { windowsHide: true });
   let totalSecs = 0;
   let stderrBuffer = '';
 

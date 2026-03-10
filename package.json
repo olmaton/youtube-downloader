@@ -7,7 +7,10 @@
     "start": "node index.js",
     "cli": "node download.js",
     "build": "npx pkg@5.8.1 index.js --output youtube-downloader.exe --targets node18-win-x64",
-    "cp": "copy youtube-downloader.exe homecontrol\\build\\windows\\x64\\runner\\Release\\youtube-downloader.exe",
+    "cp-yd": "copy youtube-downloader.exe homecontrol\\build\\windows\\x64\\runner\\Release\\youtube-downloader.exe",
+    "cp-yt": "copy yt-dlp.exe homecontrol\\build\\windows\\x64\\runner\\Release\\yt-dlp.exe",
+    "cp-ff": "copy ffmpeg.exe homecontrol\\build\\windows\\x64\\runner\\Release\\ffmpeg.exe",
+    "cp": "npm run cp-yd && npm run cp-yt && npm run cp-ff",
     "bf": "npm run build && npm run cp"
 
   },
