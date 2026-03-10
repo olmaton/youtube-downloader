@@ -89,7 +89,12 @@ function write(level, args) {
   // ── Consola ──────────────────────────────────────────────────────────────
   const color = C[level] || '';
   const stream = level === 'ERROR' || level === 'WARN' ? process.stderr : process.stdout;
-  stream.write(`${C.DIM}${ts}${C.RESET} ${color}[${level.padEnd(5)}]${C.RESET} ${msg}\n`);
+  try {
+    stream.write(`${C.DIM}${ts}${C.RESET} ${color}[${level.padEnd(5)}]${C.RESET} ${msg}\n`);
+  } catch (e) {
+    // EPIPE u otro error de consola — ignorar, el log en archivo sigue funcionando
+    if (e.code !== 'EPIPE') throw e;
+  }
 
   // ── Archivo ──────────────────────────────────────────────────────────────
   rotateIfNeeded();

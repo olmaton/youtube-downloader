@@ -658,6 +658,9 @@ app.use((err, req, res, next) => {
 
 // ─── Errores globales del proceso ─────────────────────────────────────────────
 process.on('uncaughtException', (err) => {
+  // EPIPE ocurre cuando no hay consola adjunta (ej. .exe sin terminal).
+  // Es inofensivo: simplemente no hay dónde escribir en pantalla.
+  if (err.code === 'EPIPE') return;
   logger.error('[Proceso] uncaughtException:', err);
   process.exit(1);
 });
