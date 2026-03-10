@@ -1,6 +1,6 @@
 {
   "name": "youtube-downloader",
-  "version": "2.0.0",
+  "version": "0.2.1",
   "description": "Servidor REST para descargar videos/audio de YouTube",
   "main": "index.js",
   "scripts": {
@@ -15,6 +15,9 @@
     "assets": [
       "yt-dlp.exe",
       "ffmpeg.exe"
+    ],
+    "scripts": [
+      "logger.js"
     ]
   },
   "dependencies": {

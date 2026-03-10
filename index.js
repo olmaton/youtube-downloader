@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { convertToCompatibleMp4 } = require('./converter');
 const db = require('./db');
+const logger = require('./logger');
 const { saveEntry, getHistory, clearHistory, deleteEntry, renameEntry } = db;
 
 // Añadir el directorio de trabajo al PATH para encontrar yt-dlp.exe y ffmpeg.exe
@@ -19,6 +20,7 @@ const UPLOADS_DIR  = path.join(process.cwd(), 'uploads');
 
 app.use(cors());
 app.use(express.json());
+app.use(logger.requestMiddleware);
 
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
@@ -173,7 +175,7 @@ app.get('/info', (req, res) => {
 
   proc.on('exit', (code) => {
     if (code !== 0) {
-      console.error(`[/info] Error yt-dlp (code ${code}):\n${errOutput.trim()}`);
+      logger.error(`[/info] Error yt-dlp (code ${code}):`, errOutput.trim());
       return res.status(500).json({ error: 'No se pudo obtener información del video', detail: errOutput.trim() });
     }
     const parts = output.trim().split('|||');
@@ -284,11 +286,9 @@ app.post('/download', (req, res) => {
               '--no-playlist', '--newline', '-o', filePath, cleanUrl];
     }
 
-    console.log(`\n[${jobId}] ▶ Iniciando descarga`);
-    console.log(`[${jobId}]   Título  : ${title}`);
-    console.log(`[${jobId}]   Formato : ${format}  Calidad: ${quality || 'mejor'}`);
-    console.log(`[${jobId}]   Salida  : ${filePath}`);
-    console.log(`[${jobId}]   Comando : yt-dlp ${args.join(' ')}\n`);
+    logger.info(`[${jobId}] ▶ Iniciando descarga | Título: ${title} | Formato: ${format} | Calidad: ${quality || 'mejor'}`);
+    logger.debug(`[${jobId}]   Salida  : ${filePath}`);
+    logger.debug(`[${jobId}]   Comando : yt-dlp ${args.join(' ')}`);
 
     const proc = spawn(ytdlp, args);
     job.proc = proc;
@@ -296,7 +296,7 @@ app.post('/download', (req, res) => {
     const handleData = (data) => {
       data.toString().split('\n').forEach((line) => {
         const trimmed = line.trim();
-        if (trimmed) console.log(`[${jobId}] ${trimmed}`);
+        if (trimmed) logger.debug(`[${jobId}] ${trimmed}`);
         const progress = parseProgress(line);
         if (progress) Object.assign(job, progress);
       });
@@ -325,7 +325,7 @@ app.post('/download', (req, res) => {
       }
 
       if (!resolvedPath) {
-        console.error(`[${jobId}] ❌ Descarga fallida — archivo no encontrado en ${DOWNLOAD_DIR}`);
+        logger.error(`[${jobId}] ❌ Descarga fallida — archivo no encontrado en ${DOWNLOAD_DIR}`);
         job.status = 'error';
         job.error  = 'La descarga falló o el archivo no pudo ser encontrado';
         job.proc   = null;
@@ -334,7 +334,7 @@ app.post('/download', (req, res) => {
 
       // ── Sin conversión: terminar aquí ───────────────────────────────────────
       if (!job.convert) {
-        console.log(`[${jobId}] ✅ Descarga completada: ${resolvedName}`);
+        logger.info(`[${jobId}] ✅ Descarga completada: ${resolvedName}`);
         job.status   = 'done';
         job.percent  = 100;
         job.filePath = resolvedPath;
@@ -355,7 +355,7 @@ app.post('/download', (req, res) => {
       job.totalSize = '';
       job.fileName  = convFileName;
 
-      console.log(`[${jobId}] 🔄 Iniciando conversión: ${resolvedName} → ${convFileName}`);
+      logger.info(`[${jobId}] 🔄 Iniciando conversión: ${resolvedName} → ${convFileName}`);
 
       const { proc: convProc, promise: convPromise } = convertToCompatibleMp4(
         resolvedPath,
@@ -373,7 +373,7 @@ app.post('/download', (req, res) => {
       convPromise
         .then(() => {
           if (!jobs.has(jobId)) return;
-          console.log(`[${jobId}] ✅ Conversión completada: ${convFileName}`);
+          logger.info(`[${jobId}] ✅ Conversión completada: ${convFileName}`);
           job.status   = 'done';
           job.percent  = 100;
           job.filePath = convFilePath;
@@ -382,7 +382,7 @@ app.post('/download', (req, res) => {
         })
         .catch((err) => {
           if (!jobs.has(jobId)) return;
-          console.error(`[${jobId}] ❌ Conversión fallida: ${err.message}`);
+          logger.error(`[${jobId}] ❌ Conversión fallida:`, err);
           job.status = 'error';
           job.error  = `Conversión fallida: ${err.message}`;
           job.proc   = null;
@@ -648,17 +648,38 @@ app.delete('/job/:jobId', (req, res) => {
 
 // ─── Inicio ───────────────────────────────────────────────────────────────────
 
+// ─── Manejador global de errores Express ─────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  logger.error(`[Express] Error no controlado en ${req.method} ${req.originalUrl}:`, err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: err.message || 'Error interno del servidor' });
+});
+
+// ─── Errores globales del proceso ─────────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  logger.error('[Proceso] uncaughtException:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('[Proceso] unhandledRejection:', reason instanceof Error ? reason : String(reason));
+});
+
+// ─── Inicio ───────────────────────────────────────────────────────────────────
+
 app.listen(PORT, () => {
-  console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}\n`);
-  console.log('  GET    /info?url=<yt_url>   → Información del video');
-  console.log('  POST   /download            → Iniciar descarga { url, format, quality }');
-  console.log('  POST   /convert             → Convertir video subido a MP4 compatible (form-data: video)');
-  console.log('  GET    /jobs                → Lista de todos los jobs');
-  console.log('  GET    /history             → Historial persistido');
-  console.log('  DELETE /history             → Limpiar historial');
-  console.log('  DELETE /history/:jobId      → Eliminar entrada del historial');
-  console.log('  GET    /progress/:jobId     → Progreso en tiempo real (SSE)');
-  console.log('  GET    /status/:jobId       → Estado JSON (polling)');
-  console.log('  GET    /file/:jobId         → Descargar archivo');
-  console.log('  DELETE /job/:jobId          → Cancelar / eliminar job\n');
+  logger.info(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  logger.info(`📄 Logs en: ${logger.logFile}`);
+  logger.debug('  GET    /info?url=<yt_url>   → Información del video');
+  logger.debug('  POST   /download            → Iniciar descarga { url, format, quality }');
+  logger.debug('  POST   /convert             → Convertir video subido a MP4 compatible (form-data: video)');
+  logger.debug('  GET    /jobs                → Lista de todos los jobs');
+  logger.debug('  GET    /history             → Historial persistido');
+  logger.debug('  DELETE /history             → Limpiar historial');
+  logger.debug('  DELETE /history/:jobId      → Eliminar entrada del historial');
+  logger.debug('  GET    /progress/:jobId     → Progreso en tiempo real (SSE)');
+  logger.debug('  GET    /status/:jobId       → Estado JSON (polling)');
+  logger.debug('  GET    /file/:jobId         → Descargar archivo');
+  logger.debug('  DELETE /job/:jobId          → Cancelar / eliminar job');
 });
